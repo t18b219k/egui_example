@@ -1,5 +1,5 @@
 use std::iter;
-use std::time::Instant;
+use instant::Instant;
 
 use chrono::Timelike;
 use egui::FontDefinitions;
@@ -8,18 +8,29 @@ use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
-const INITIAL_WIDTH: u32 = 1920;
-const INITIAL_HEIGHT: u32 = 1080;
+use epi::backend::RepaintSignal;
+
+const INITIAL_WIDTH: u32 = 1280;
+const INITIAL_HEIGHT: u32 = 720;
 
 /// A custom event type for the winit app.
+///
+#[cfg(not(target_arch = "wasm32"))]
 enum Event {
     RequestRedraw,
 }
-
+#[cfg(target_arch = "wasm32")]
+struct RepaintSignalMock;
+#[cfg(target_arch = "wasm32")]
+impl RepaintSignal for RepaintSignalMock{
+    fn request_repaint(&self) {
+    }
+}
 /// This is the repaint signal type that egui needs for requesting a repaint from another thread.
 /// It sends the custom RequestRedraw event to the winit event loop.
+#[cfg(not(target_arch = "wasm32"))]
 struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<Event>>);
-
+#[cfg(not(target_arch = "wasm32"))]
 impl epi::backend::RepaintSignal for ExampleRepaintSignal {
     fn request_repaint(&self) {
         self.0.lock().unwrap().send_event(Event::RequestRedraw).ok();
@@ -27,39 +38,27 @@ impl epi::backend::RepaintSignal for ExampleRepaintSignal {
 }
 
 /// A simple egui + wgpu + winit based example.
-fn main() {
-    let event_loop = winit::event_loop::EventLoop::with_user_event();
-    let window = winit::window::WindowBuilder::new()
-        .with_decorations(true)
-        .with_resizable(true)
-        .with_transparent(false)
-        .with_title("egui-wgpu_winit example")
-        .with_inner_size(winit::dpi::PhysicalSize {
-            width: INITIAL_WIDTH,
-            height: INITIAL_HEIGHT,
-        })
-        .build(&event_loop)
-        .unwrap();
+async fn run(event_loop:winit::event_loop::EventLoop<()>,window:winit::window::Window) {
 
     let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
 
     // WGPU 0.11+ support force fallback (if HW implementation not supported), set it to true or false (optional).
-    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(&surface),
         force_fallback_adapter: false,
-    }))
+    }).await
     .unwrap();
 
-    let (device, queue) = pollster::block_on(adapter.request_device(
+    let (device, queue) = adapter.request_device(
         &wgpu::DeviceDescriptor {
             features: wgpu::Features::default(),
             limits: wgpu::Limits::default(),
             label: None,
         },
         None,
-    ))
+    ).await
     .unwrap();
 
     let size = window.inner_size();
@@ -72,10 +71,12 @@ fn main() {
         present_mode: wgpu::PresentMode::Fifo,
     };
     surface.configure(&device, &surface_config);
-
+    #[cfg(not(target_arch = "wasm32"))]
     let repaint_signal = std::sync::Arc::new(ExampleRepaintSignal(std::sync::Mutex::new(
         event_loop.create_proxy(),
     )));
+    #[cfg(target_arch = "wasm32")]
+    let repaint_signal =std::sync::Arc::new(RepaintSignalMock);
 
     // We use the egui_winit_platform crate as the platform.
     let mut platform = Platform::new(PlatformDescriptor {
@@ -183,7 +184,7 @@ fn main() {
                 //     *control_flow = ControlFlow::Wait;
                 // }
             }
-            MainEventsCleared | UserEvent(Event::RequestRedraw) => {
+            MainEventsCleared | UserEvent(_) => {
                 window.request_redraw();
             }
             WindowEvent { event, .. } => match event {
@@ -207,8 +208,29 @@ fn main() {
     });
 }
 
-/// Time of day as seconds since midnight. Used for clock in demo app.
-pub fn seconds_since_midnight() -> f64 {
-    let time = chrono::Local::now().time();
-    time.num_seconds_from_midnight() as f64 + 1e-9 * (time.nanosecond() as f64)
+fn main(){
+    let event_loop=winit::event_loop::EventLoop::new();
+    let window = winit::window::Window::new(&event_loop).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
+        {
+            env_logger::init();
+            // Temporarily avoid srgb formats for the swapchain on the web
+            pollster::block_on(run(event_loop, window));
+        }
+    #[cfg(target_arch = "wasm32")]
+        {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init().expect("could not initialize logger");
+            use winit::platform::web::WindowExtWebSys;
+            // On wasm, append the canvas to the document body
+            web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| doc.body())
+                .and_then(|body| {
+                    body.append_child(&web_sys::Element::from(window.canvas()))
+                        .ok()
+                })
+                .expect("couldn't append canvas to document body");
+            wasm_bindgen_futures::spawn_local(run(event_loop, window));
+        }
 }
