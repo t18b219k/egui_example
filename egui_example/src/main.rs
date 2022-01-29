@@ -1,65 +1,60 @@
-use std::iter;
 use instant::Instant;
+use std::iter;
 
-use chrono::Timelike;
 use egui::FontDefinitions;
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
+use winit::dpi::LogicalSize;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
-use epi::backend::RepaintSignal;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
-/// A custom event type for the winit app.
-///
-#[cfg(not(target_arch = "wasm32"))]
-enum Event {
-    RequestRedraw,
-}
 #[cfg(target_arch = "wasm32")]
 struct RepaintSignalMock;
 #[cfg(target_arch = "wasm32")]
-impl RepaintSignal for RepaintSignalMock{
-    fn request_repaint(&self) {
-    }
+impl epi::backend::RepaintSignal for RepaintSignalMock {
+    fn request_repaint(&self) {}
 }
 /// This is the repaint signal type that egui needs for requesting a repaint from another thread.
 /// It sends the custom RequestRedraw event to the winit event loop.
 #[cfg(not(target_arch = "wasm32"))]
-struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<Event>>);
+struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<()>>);
 #[cfg(not(target_arch = "wasm32"))]
 impl epi::backend::RepaintSignal for ExampleRepaintSignal {
     fn request_repaint(&self) {
-        self.0.lock().unwrap().send_event(Event::RequestRedraw).ok();
+        self.0.lock().unwrap().send_event(()).ok();
     }
 }
 
 /// A simple egui + wgpu + winit based example.
-async fn run(event_loop:winit::event_loop::EventLoop<()>,window:winit::window::Window) {
-
+async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
     let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
 
     // WGPU 0.11+ support force fallback (if HW implementation not supported), set it to true or false (optional).
-    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: Some(&surface),
-        force_fallback_adapter: false,
-    }).await
-    .unwrap();
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
+        })
+        .await
+        .unwrap();
 
-    let (device, queue) = adapter.request_device(
-        &wgpu::DeviceDescriptor {
-            features: wgpu::Features::default(),
-            limits: wgpu::Limits::default(),
-            label: None,
-        },
-        None,
-    ).await
-    .unwrap();
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                features: wgpu::Features::default(),
+                limits: wgpu::Limits::default(),
+                label: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
 
     let size = window.inner_size();
     let surface_format = surface.get_preferred_format(&adapter).unwrap();
@@ -76,7 +71,7 @@ async fn run(event_loop:winit::event_loop::EventLoop<()>,window:winit::window::W
         event_loop.create_proxy(),
     )));
     #[cfg(target_arch = "wasm32")]
-    let repaint_signal =std::sync::Arc::new(RepaintSignalMock);
+    let repaint_signal = std::sync::Arc::new(RepaintSignalMock);
 
     // We use the egui_winit_platform crate as the platform.
     let mut platform = Platform::new(PlatformDescriptor {
@@ -125,7 +120,7 @@ async fn run(event_loop:winit::event_loop::EventLoop<()>,window:winit::window::W
                 platform.begin_frame();
                 let app_output = epi::backend::AppOutput::default();
 
-                let mut frame =  epi::Frame::new(epi::backend::FrameData {
+                let mut frame = epi::Frame::new(epi::backend::FrameData {
                     info: epi::IntegrationInfo {
                         name: "egui_example",
                         web_info: None,
@@ -208,29 +203,37 @@ async fn run(event_loop:winit::event_loop::EventLoop<()>,window:winit::window::W
     });
 }
 
-fn main(){
-    let event_loop=winit::event_loop::EventLoop::new();
-    let window = winit::window::Window::new(&event_loop).unwrap();
+fn main() {
+    let event_loop = winit::event_loop::EventLoop::new();
+    let wb = winit::window::WindowBuilder::new();
+
+    let window = wb
+        .with_inner_size(LogicalSize {
+            width: INITIAL_WIDTH,
+            height: INITIAL_HEIGHT,
+        })
+        .build(&event_loop)
+        .unwrap();
     #[cfg(not(target_arch = "wasm32"))]
-        {
-            env_logger::init();
-            // Temporarily avoid srgb formats for the swapchain on the web
-            pollster::block_on(run(event_loop, window));
-        }
+    {
+        env_logger::init();
+        // Temporarily avoid srgb formats for the swapchain on the web
+        pollster::block_on(run(event_loop, window));
+    }
     #[cfg(target_arch = "wasm32")]
-        {
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init().expect("could not initialize logger");
-            use winit::platform::web::WindowExtWebSys;
-            // On wasm, append the canvas to the document body
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| doc.body())
-                .and_then(|body| {
-                    body.append_child(&web_sys::Element::from(window.canvas()))
-                        .ok()
-                })
-                .expect("couldn't append canvas to document body");
-            wasm_bindgen_futures::spawn_local(run(event_loop, window));
-        }
+    {
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        console_log::init().expect("could not initialize logger");
+        use winit::platform::web::WindowExtWebSys;
+        // On wasm, append the canvas to the document body
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| doc.body())
+            .and_then(|body| {
+                body.append_child(&web_sys::Element::from(window.canvas()))
+                    .ok()
+            })
+            .expect("couldn't append canvas to document body");
+        wasm_bindgen_futures::spawn_local(run(event_loop, window));
+    }
 }
