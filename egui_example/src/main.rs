@@ -1,77 +1,31 @@
 use instant::Instant;
 use std::iter;
 
-use egui::{FontDefinitions, FontData};
-use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
+use egui::{FontData, FontDefinitions};
+
+use egui_glow::glow;
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
+use std::borrow::Cow;
 use winit::dpi::LogicalSize;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
-use std::borrow::Cow;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
-#[cfg(target_arch = "wasm32")]
+
 struct RepaintSignalMock;
-#[cfg(target_arch = "wasm32")]
+
 impl epi::backend::RepaintSignal for RepaintSignalMock {
     fn request_repaint(&self) {}
 }
-/// This is the repaint signal type that egui needs for requesting a repaint from another thread.
-/// It sends the custom RequestRedraw event to the winit event loop.
-#[cfg(not(target_arch = "wasm32"))]
-struct ExampleRepaintSignal(std::sync::Mutex<winit::event_loop::EventLoopProxy<()>>);
-#[cfg(not(target_arch = "wasm32"))]
-impl epi::backend::RepaintSignal for ExampleRepaintSignal {
-    fn request_repaint(&self) {
-        self.0.lock().unwrap().send_event(()).ok();
-    }
-}
+
 static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
 /// A simple egui + wgpu + winit based example.
 async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
-    let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
-    let surface = unsafe { instance.create_surface(&window) };
-
-    // WGPU 0.11+ support force fallback (if HW implementation not supported), set it to true or false (optional).
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-        })
-        .await
-        .unwrap();
-
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                features: wgpu::Features::default(),
-                limits: wgpu::Limits::default(),
-                label: None,
-            },
-            None,
-        )
-        .await
-        .unwrap();
-
     let size = window.inner_size();
-    let surface_format = surface.get_preferred_format(&adapter).unwrap();
-    let mut surface_config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface_format,
-        width: size.width as u32,
-        height: size.height as u32,
-        present_mode: wgpu::PresentMode::Fifo,
-    };
-    surface.configure(&device, &surface_config);
-    #[cfg(not(target_arch = "wasm32"))]
-    let repaint_signal = std::sync::Arc::new(ExampleRepaintSignal(std::sync::Mutex::new(
-        event_loop.create_proxy(),
-    )));
-    #[cfg(target_arch = "wasm32")]
+
     let repaint_signal = std::sync::Arc::new(RepaintSignalMock);
 
     // We use the egui_winit_platform crate as the platform.
@@ -82,23 +36,41 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         font_definitions: FontDefinitions::default(),
         style: Default::default(),
     });
-    let mut egui_ctx =platform.context();
+    let mut egui_ctx = platform.context();
     //to install japanese font start frame.
     egui_ctx.begin_frame(egui::RawInput::default());
     let mut fonts = egui_ctx.fonts().definitions().clone();
     //install noto sans jp regular
-    fonts
-        .font_data
-        .insert("NotoSansCJK".to_string(), FontData::from_static(NOTO_SANS_JP_REGULAR));
+    fonts.font_data.insert(
+        "NotoSansCJK".to_string(),
+        FontData::from_static(NOTO_SANS_JP_REGULAR),
+    );
     fonts
         .fonts_for_family
         .values_mut()
         .for_each(|x| x.push("NotoSansCJK".to_string()));
     egui_ctx.set_fonts(fonts);
     egui_ctx.end_frame();
+    //
+    use wasm_bindgen::JsCast;
+    use winit::platform::web::WindowExtWebSys;
+    let canvas = window.canvas();
+    let gl2_ctx = canvas
+        .get_context("webgl2")
+        .expect("Failed to query about WebGL2 context");
+    let gl2_ctx = gl2_ctx.unwrap();
 
+    let gl2_ctx = gl2_ctx
+        .dyn_into::<web_sys::WebGl2RenderingContext>()
+        .unwrap();
+    let glow_ctx = egui_glow::glow::Context::from_webgl2_context(gl2_ctx);
     // We use the egui_wgpu_backend crate as the render backend.
-    let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
+    let mut painter = egui_glow::Painter::new(
+        &glow_ctx,
+        Some([INITIAL_WIDTH as i32, INITIAL_HEIGHT as i32]),
+        "",
+    )
+    .unwrap();
 
     // Display the demo application that ships with egui.
     let mut demo_app = egui_demo_lib::WrapApp::default();
@@ -112,24 +84,6 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         match event {
             RedrawRequested(..) => {
                 platform.update_time(start_time.elapsed().as_secs_f64());
-
-                let output_frame = match surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(wgpu::SurfaceError::Outdated) => {
-                        // This error occurs when the app is minimized on Windows.
-                        // Silently return here to prevent spamming the console with:
-                        // "The underlying surface has changed, and therefore the swap chain must be updated"
-                        return;
-                    }
-                    Err(e) => {
-                        eprintln!("Dropped frame with error: {}", e);
-                        return;
-                    }
-                };
-                let output_view = output_frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-
                 // Begin to draw the UI frame.
                 let egui_start = Instant::now();
                 platform.begin_frame();
@@ -138,7 +92,9 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 let mut frame = epi::Frame::new(epi::backend::FrameData {
                     info: epi::IntegrationInfo {
                         name: "egui_example",
-                        web_info: None,
+                        web_info: Some(WebInfo {
+                            web_location_hash: "".to_string(),
+                        }),
                         cpu_usage: previous_frame_time,
                         native_pixels_per_point: Some(window.scale_factor() as _),
                         prefer_dark_mode: None,
@@ -159,63 +115,33 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                     window.set_ime_position(winit::dpi::LogicalPosition { x, y });
                 }
                 let paint_jobs = platform.context().tessellate(paint_commands);
-
+                {
+                    unsafe {
+                        use glow::HasContext as _;
+                        glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
+                        glow_ctx.clear(glow::COLOR_BUFFER_BIT);
+                    }
+                    painter.upload_egui_texture(&glow_ctx, &platform.context().font_image());
+                    // draw things behind egui here
+                    painter.paint_meshes(
+                        &glow_ctx,
+                        [window.inner_size().width, window.inner_size().height],
+                        window.scale_factor() as f32,
+                        paint_jobs,
+                    );
+                }
                 let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
                 previous_frame_time = Some(frame_time);
-
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("encoder"),
-                });
-
-                // Upload all resources for the GPU.
-                let screen_descriptor = ScreenDescriptor {
-                    physical_width: surface_config.width,
-                    physical_height: surface_config.height,
-                    scale_factor: window.scale_factor() as f32,
-                };
-                egui_rpass.update_texture(&device, &queue, &platform.context().font_image());
-                egui_rpass.update_user_textures(&device, &queue);
-                egui_rpass.update_buffers(&device, &queue, &paint_jobs, &screen_descriptor);
-
-                // Record all render passes.
-                egui_rpass
-                    .execute(
-                        &mut encoder,
-                        &output_view,
-                        &paint_jobs,
-                        &screen_descriptor,
-                        Some(wgpu::Color::BLACK),
-                    )
-                    .unwrap();
-                // Submit the commands.
-                queue.submit(iter::once(encoder.finish()));
-
-                // Redraw egui
-                output_frame.present();
-
-                // Suppport reactive on windows only, but not on linux.
-                // if _output.needs_repaint {
-                //     *control_flow = ControlFlow::Poll;
-                // } else {
-                //     *control_flow = ControlFlow::Wait;
-                // }
             }
             MainEventsCleared | UserEvent(_) => {
                 window.request_redraw();
             }
             WindowEvent { event, .. } => match event {
-                winit::event::WindowEvent::Resized(size) => {
-                    // Resize with 0 width and height is used by winit to signal a minimize event on Windows.
-                    // See: https://github.com/rust-windowing/winit/issues/208
-                    // This solves an issue where the app would panic when minimizing on Windows.
-                    if size.width > 0 && size.height > 0 {
-                        surface_config.width = size.width;
-                        surface_config.height = size.height;
-                        surface.configure(&device, &surface_config);
-                    }
-                }
                 winit::event::WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
+                }
+                winit::event::WindowEvent::Resized(x) => {
+                    window.set_inner_size(x);
                 }
                 _ => {}
             },
@@ -239,7 +165,7 @@ fn main() {
     {
         env_logger::init();
         // Temporarily avoid srgb formats for the swapchain on the web
-        pollster::block_on(run(event_loop, window));
+        run(event_loop, window).await;
     }
     #[cfg(target_arch = "wasm32")]
     {
