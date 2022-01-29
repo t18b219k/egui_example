@@ -1,13 +1,14 @@
 use instant::Instant;
 use std::iter;
 
-use egui::FontDefinitions;
+use egui::{FontDefinitions, FontData};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
 use winit::dpi::LogicalSize;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
+use std::borrow::Cow;
 
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
@@ -28,7 +29,7 @@ impl epi::backend::RepaintSignal for ExampleRepaintSignal {
         self.0.lock().unwrap().send_event(()).ok();
     }
 }
-
+static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
 /// A simple egui + wgpu + winit based example.
 async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
     let instance = wgpu::Instance::new(wgpu::Backends::PRIMARY);
@@ -81,6 +82,20 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         font_definitions: FontDefinitions::default(),
         style: Default::default(),
     });
+    let mut egui_ctx =platform.context();
+    //to install japanese font start frame.
+    egui_ctx.begin_frame(egui::RawInput::default());
+    let mut fonts = egui_ctx.fonts().definitions().clone();
+    //install noto sans jp regular
+    fonts
+        .font_data
+        .insert("NotoSansCJK".to_string(), FontData::from_static(NOTO_SANS_JP_REGULAR));
+    fonts
+        .fonts_for_family
+        .values_mut()
+        .for_each(|x| x.push("NotoSansCJK".to_string()));
+    egui_ctx.set_fonts(fonts);
+    egui_ctx.end_frame();
 
     // We use the egui_wgpu_backend crate as the render backend.
     let mut egui_rpass = RenderPass::new(&device, surface_format, 1);
