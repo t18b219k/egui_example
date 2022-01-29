@@ -136,7 +136,13 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 demo_app.update(&platform.context(), &mut frame);
 
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
-                let (_output, paint_commands) = platform.end_frame(Some(&window));
+                let (output, paint_commands) = platform.end_frame(Some(&window));
+                let egui::Output {
+                    text_cursor_pos, ..
+                } = output;
+                if let Some(egui::Pos2 { x, y }) = text_cursor_pos {
+                    window.set_ime_position(winit::dpi::LogicalPosition { x, y });
+                }
                 let paint_jobs = platform.context().tessellate(paint_commands);
 
                 let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
