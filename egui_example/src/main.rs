@@ -1,12 +1,10 @@
 use instant::Instant;
-use std::iter;
 
 use egui::{FontData, FontDefinitions};
 
 use egui_glow::glow;
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
-use std::borrow::Cow;
 use winit::dpi::LogicalSize;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;

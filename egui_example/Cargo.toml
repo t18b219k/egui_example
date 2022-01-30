@@ -9,11 +9,9 @@ resolver = "2"
 
 [dependencies]
 egui_glow = {version = "0.16",default_features = false}
-chrono = "0.4"
 egui = "0.16"
 epi = "0.16"
 egui_winit_platform = "0.13"
-wgpu = "0.12"
 winit = "0.26"
 egui_demo_lib = "0.16"
 instant ="0.1"
