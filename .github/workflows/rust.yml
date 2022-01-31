@@ -29,10 +29,6 @@ jobs:
        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }} 
     - name: install target
       run: rustup target add wasm32-unknown-unknown
-    - name: install wasm-bingen
-      run: cargo install wasm-bindgen-cli
-    - name: update wasm-bindgen
-      run: cargo update -p wasm-bindgen
     - name: Build
       run: cargo build --package egui_example --verbose --release --target wasm32-unknown-unknown 
     - name: bindgen
