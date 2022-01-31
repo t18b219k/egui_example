@@ -52,15 +52,15 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
     use wasm_bindgen::JsCast;
     use winit::platform::web::WindowExtWebSys;
     let canvas = window.canvas();
-    let gl2_ctx = canvas
-        .get_context("webgl2")
+    let gl_ctx = canvas
+        .get_context("webgl1")
         .expect("Failed to query about WebGL2 context");
-    let gl2_ctx = gl2_ctx.unwrap();
+    let gl_ctx = gl_ctx.unwrap();
 
-    let gl2_ctx = gl2_ctx
-        .dyn_into::<web_sys::WebGl2RenderingContext>()
+    let gl_ctx = gl_ctx
+        .dyn_into::<web_sys::WebGlRenderingContext>()
         .unwrap();
-    let glow_ctx = egui_glow::glow::Context::from_webgl2_context(gl2_ctx);
+    let glow_ctx = egui_glow::glow::Context::from_webgl1_context(gl_ctx);
     // We use the egui_wgpu_backend crate as the render backend.
     let mut painter = egui_glow::Painter::new(
         &glow_ctx,
