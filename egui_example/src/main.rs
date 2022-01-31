@@ -12,7 +12,6 @@ use winit::event_loop::ControlFlow;
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
-
 struct RepaintSignalMock;
 
 impl epi::backend::RepaintSignal for RepaintSignalMock {
