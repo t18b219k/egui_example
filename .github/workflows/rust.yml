@@ -16,8 +16,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: install toolchain
+    - name: install target
       run: rustup target add wasm32-unknown-unknown
+    - name: install wasm-bingen
+      run: cargo install wasm-bindgen-cli
+    - name: update wasm-bindgen
+      run: cargo update -p wasm-bindgen
     - name: Build
       run: cargo build --verbose --release --target wasm32-unknown-unknown 
     - name: bindgen
