@@ -187,8 +187,6 @@ mod wasm {
 
     #[wasm_bindgen(start)]
     pub fn run() {
-        console_log::init_with_level(log::Level::Debug).expect("error initializing logger");
-
         super::main();
     }
 }
