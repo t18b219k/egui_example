@@ -1,6 +1,6 @@
 use instant::Instant;
 
-use egui::{FontData, FontDefinitions};
+use egui::{FontData, FontDefinitions, Rgba};
 
 use egui_web::{web_sys, wasm_bindgen, Painter};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -48,8 +48,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         .for_each(|x| x.push("NotoSansCJK".to_string()));
     egui_ctx.set_fonts(fonts);
     egui_ctx.end_frame();
-    //
-    use wasm_bindgen::JsCast;
+
     use winit::platform::web::WindowExtWebSys;
     let canvas = window.canvas();
     canvas.set_id("egui_canvas_element");
@@ -66,6 +65,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
 
         match event {
             RedrawRequested(..) => {
+
                 platform.update_time(start_time.elapsed().as_secs_f64());
                 // Begin to draw the UI frame.
                 let egui_start = Instant::now();
@@ -99,7 +99,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 }
                 let paint_jobs = platform.context().tessellate(paint_commands);
                 {
-
+                    painter.clear(Rgba::GREEN);
                     frame.take_app_output().tex_allocation_data.creations.iter().for_each(
                         |(k,v)|{
                             painter.set_texture(*k,v.clone());
@@ -113,7 +113,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                     painter.paint_meshes(
                         paint_jobs,
                         window.scale_factor() as f32,
-                    );
+                    ).unwrap();
                 }
                 let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
                 previous_frame_time = Some(frame_time);
