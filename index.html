@@ -14,6 +14,22 @@
 <p>
     This page demonstrate winit on web support IME.
 </p>
+
+<script>
+    // We'll defer our execution until the wasm is ready to go.
+    // Here we tell bindgen the path to the wasm file so it can start
+    // initialization and return to us a promise when it's done.
+    wasm_bindgen("./egui_demo_app_bg.wasm")
+        .then(on_wasm_loaded)
+        .catch(console.error);
+
+    function on_wasm_loaded() {
+        console.log("loaded wasm, starting egui app…");
+        wasm_bindgen.run();
+        console.log("egui app started.");
+        document.getElementById("loading").remove();
+    }
+</script>
 </body>
 
 </html>
