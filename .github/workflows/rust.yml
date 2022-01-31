@@ -16,16 +16,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: install target
-      run: rustup target add wasm32-unknown-unknown
-    - name: install wasm-bingen
-      run: cargo install wasm-bindgen-cli
-    - name: update wasm-bindgen
-      run: cargo update -p wasm-bindgen
-    - name: Build
-      run: cargo build --package egui_example --verbose --release --target wasm32-unknown-unknown 
-    - name: bindgen
-      run: wasm-bindgen ./target/wasm32-unknown-unknown/release/egui_example.wasm --out-dir docs
+    
     - name: cache
       uses: actions/cache@v2
       with:
@@ -36,3 +27,26 @@ jobs:
         ~/.cargo/git
         target
        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }} 
+    - name: install target
+      run: rustup target add wasm32-unknown-unknown
+    - name: install wasm-bingen
+      run: cargo install wasm-bindgen-cli
+    - name: update wasm-bindgen
+      run: cargo update -p wasm-bindgen
+    - name: Build
+      run: cargo build --package egui_example --verbose --release --target wasm32-unknown-unknown 
+    - name: bindgen
+      run: wasm-bindgen ./target/wasm32-unknown-unknown/release/egui_example.wasm --out-dir docs
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v2.3.1
+      with:
+        # Artifact name
+        name: page data # optional, default is artifact
+        # A file, directory or wildcard pattern that describes what to upload
+        path: docs
+        # The desired behavior if no files are found using the provided path.
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs
