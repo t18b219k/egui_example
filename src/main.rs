@@ -53,8 +53,8 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
     use winit::platform::web::WindowExtWebSys;
     let canvas = window.canvas();
     let gl_ctx = canvas
-        .get_context("webgl1")
-        .expect("Failed to query about WebGL2 context");
+        .get_context("webgl")
+        .expect("Failed to query about WebGL1 context");
     let gl_ctx = gl_ctx.unwrap();
 
     let gl_ctx = gl_ctx
