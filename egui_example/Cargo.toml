@@ -8,7 +8,7 @@ edition = "2018"
 resolver = "2"
 
 [dependencies]
-egui_glow = {version = "0.16",default_features = false}
+egui_glow = {version = "0.16",default_features = false,features=["epi"]}
 egui = "0.16"
 epi = "0.16"
 egui_winit_platform = "0.13"

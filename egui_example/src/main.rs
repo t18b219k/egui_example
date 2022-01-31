@@ -118,6 +118,14 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                         glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
                         glow_ctx.clear(glow::COLOR_BUFFER_BIT);
                     }
+                    frame.take_app_output().tex_allocation_data.creations.iter().for_each(
+                        |(k,v)|{
+                            painter.set_texture(&glow_ctx,*k,v);
+                        }
+                    );
+                    frame.take_app_output().tex_allocation_data.destructions.iter().for_each(|k|{
+                        painter.free_texture(*k);
+                    });
                     painter.upload_egui_texture(&glow_ctx, &platform.context().font_image());
                     // draw things behind egui here
                     painter.paint_meshes(
