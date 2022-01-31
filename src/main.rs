@@ -183,7 +183,6 @@ fn main() {
 }
 #[cfg(target_arch = "wasm32")]
 mod wasm {
-    use egui_web::wasm_bindgen;
     use wasm_bindgen::prelude::*;
 
     #[wasm_bindgen(start)]
