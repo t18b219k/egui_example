@@ -167,7 +167,7 @@ fn main() {
         .unwrap();
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        console_log::init().expect("could not initialize logger");
+
         use winit::platform::web::WindowExtWebSys;
         // On wasm, append the canvas to the document body
         web_sys::window()
@@ -187,6 +187,7 @@ mod wasm {
 
     #[wasm_bindgen(start)]
     pub fn run() {
+        console_log::init().expect("could not initialize logger");
         super::main();
     }
 }
