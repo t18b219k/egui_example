@@ -2,7 +2,7 @@ use instant::Instant;
 
 use egui::{FontData, FontDefinitions};
 
-use egui_glow::glow;
+use egui_web::{web_sys, wasm_bindgen, Painter};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
 use winit::dpi::LogicalSize;
@@ -52,22 +52,8 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
     use wasm_bindgen::JsCast;
     use winit::platform::web::WindowExtWebSys;
     let canvas = window.canvas();
-    let gl_ctx = canvas
-        .get_context("webgl")
-        .expect("Failed to query about WebGL1 context");
-    let gl_ctx = gl_ctx.unwrap();
-
-    let gl_ctx = gl_ctx
-        .dyn_into::<web_sys::WebGlRenderingContext>()
-        .unwrap();
-    let glow_ctx = egui_glow::glow::Context::from_webgl1_context(gl_ctx);
-    // We use the egui_wgpu_backend crate as the render backend.
-    let mut painter = egui_glow::Painter::new(
-        &glow_ctx,
-        Some([INITIAL_WIDTH as i32, INITIAL_HEIGHT as i32]),
-        "",
-    )
-    .unwrap();
+    canvas.set_id("egui_canvas_element");
+    let mut painter =egui_web::webgl1::WebGlPainter::new("egui_canvas_element").unwrap();
 
     // Display the demo application that ships with egui.
     let mut demo_app = egui_demo_lib::WrapApp::default();
@@ -113,26 +99,20 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 }
                 let paint_jobs = platform.context().tessellate(paint_commands);
                 {
-                    unsafe {
-                        use glow::HasContext as _;
-                        glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
-                        glow_ctx.clear(glow::COLOR_BUFFER_BIT);
-                    }
+
                     frame.take_app_output().tex_allocation_data.creations.iter().for_each(
                         |(k,v)|{
-                            painter.set_texture(&glow_ctx,*k,v);
+                            painter.set_texture(*k,v.clone());
                         }
                     );
                     frame.take_app_output().tex_allocation_data.destructions.iter().for_each(|k|{
                         painter.free_texture(*k);
                     });
-                    painter.upload_egui_texture(&glow_ctx, &platform.context().font_image());
+                    painter.upload_egui_texture( &platform.context().font_image());
                     // draw things behind egui here
                     painter.paint_meshes(
-                        &glow_ctx,
-                        [window.inner_size().width, window.inner_size().height],
-                        window.scale_factor() as f32,
                         paint_jobs,
+                        window.scale_factor() as f32,
                     );
                 }
                 let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
@@ -183,6 +163,7 @@ fn main() {
 }
 #[cfg(target_arch = "wasm32")]
 mod wasm {
+    use egui_web::wasm_bindgen;
     use wasm_bindgen::prelude::*;
 
     #[wasm_bindgen(start)]
