@@ -154,7 +154,6 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         }
     });
 }
-
 fn main() {
     let event_loop = winit::event_loop::EventLoop::new();
     let wb = winit::window::WindowBuilder::new();
@@ -166,13 +165,6 @@ fn main() {
         })
         .build(&event_loop)
         .unwrap();
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        env_logger::init();
-        // Temporarily avoid srgb formats for the swapchain on the web
-        run(event_loop, window).await;
-    }
-    #[cfg(target_arch = "wasm32")]
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init().expect("could not initialize logger");
@@ -187,5 +179,16 @@ fn main() {
             })
             .expect("couldn't append canvas to document body");
         wasm_bindgen_futures::spawn_local(run(event_loop, window));
+    }
+}
+#[cfg(target_arch = "wasm32")]
+mod wasm {
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen(start)]
+    pub fn run() {
+        console_log::init_with_level(log::Level::Debug).expect("error initializing logger");
+
+        super::main();
     }
 }
