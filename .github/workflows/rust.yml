@@ -23,7 +23,7 @@ jobs:
     - name: opt wasm
       run: wasm-opt docs/egui_example_bg.wasm -O2 --fast-math -o docs/egui_example_bg.wasm
     - name: cache
-    - uses: actions/cache@v2
+      uses: actions/cache@v2
       with:
        path: |
         ~/.cargo/registry
