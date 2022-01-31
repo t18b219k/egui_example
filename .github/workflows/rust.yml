@@ -26,13 +26,19 @@ jobs:
         ~/.cargo/registry
         ~/.cargo/git
         target
-       key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }} 
+       key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - name: install wasm optimizer
+      run: sudo apt install -y wabt binaryen
     - name: install target
       run: rustup target add wasm32-unknown-unknown
     - name: Build
       run: cargo build --package egui_example --verbose --release --target wasm32-unknown-unknown 
     - name: bindgen
-      run: wasm-bindgen ./target/wasm32-unknown-unknown/release/egui_example.wasm --out-dir docs
+      run: wasm-bindgen ./target/wasm32-unknown-unknown/release/egui_example.wasm --out-dir docs --target no-modules --no-typescript
+    - name: wasm-strip
+      run: wasm-strip docs/egui_example_bg.wasm
+    - name: wasm-opt
+      run: wasm-opt docs/egui_example_bg.wasm -O2 --fast-math -o docs/egui_example_bg.wasm
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2.3.1
       with:
