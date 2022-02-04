@@ -61,10 +61,10 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         .dyn_into::<web_sys::WebGlRenderingContext>()
         .unwrap();
     let glow_ctx = egui_glow::glow::Context::from_webgl1_context(gl_ctx);
-    // We use the egui_wgpu_backend crate as the render backend.
+    // We use the egui_glow crate as the render backend.
     let mut painter = egui_glow::Painter::new(
         &glow_ctx,
-        Some([INITIAL_WIDTH as i32, INITIAL_HEIGHT as i32]),
+        None,
         "",
     )
     .unwrap();
