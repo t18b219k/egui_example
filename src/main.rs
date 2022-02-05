@@ -11,16 +11,21 @@ use winit::dpi::LogicalSize;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
 
+struct RepaintSignalMock;
+
+impl epi::backend::RepaintSignal for RepaintSignalMock {
+    fn request_repaint(&self) {}
+}
+
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
-
 
 static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
 
 async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
     let size = window.inner_size();
 
-
+    let repaint_signal = std::sync::Arc::new(RepaintSignalMock);
     // We use the egui_winit_platform crate as the platform.
     let mut platform = Platform::new(PlatformDescriptor {
         physical_width: size.width as u32,
@@ -29,7 +34,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         font_definitions: FontDefinitions::default(),
         style: Default::default(),
     });
-    let  egui_ctx = platform.context();
+    let egui_ctx = platform.context();
     //install japanese
     let mut fonts = FontDefinitions::default();
 
@@ -52,24 +57,17 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         .expect("Failed to query about WebGL1 context");
     let gl_ctx = gl_ctx.unwrap();
 
-    let gl_ctx = gl_ctx
-        .dyn_into::<web_sys::WebGlRenderingContext>()
-        .unwrap();
+    let gl_ctx = gl_ctx.dyn_into::<web_sys::WebGlRenderingContext>().unwrap();
     let glow_ctx = egui_glow::glow::Context::from_webgl1_context(gl_ctx);
     // We use the egui_glow crate as the render backend.
-    let mut painter = egui_glow::Painter::new(
-        &glow_ctx,
-        None,
-        "",
-    )
-    .unwrap();
+    let mut painter = egui_glow::Painter::new(&glow_ctx, None, "").unwrap();
 
     // Display the demo application that ships with egui.
 
     let mut debugger = keyboard_debugger::KeyboardDebugger::new();
 
     let start_time = Instant::now();
-
+    let mut previous_frame_time = None;
     event_loop.run(move |event, _, control_flow| {
         // Pass the winit events to the platform integration.
         platform.handle_event(&event);
@@ -77,22 +75,36 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         match event {
             RedrawRequested(..) => {
                 platform.update_time(start_time.elapsed().as_secs_f64());
+                // Begin to draw the UI frame.
 
+                let egui_start = Instant::now();
                 platform.begin_frame();
+                platform.begin_frame();
+                let app_output = epi::backend::AppOutput::default();
 
-
-                // Draw the demo application.
-                egui::containers::CentralPanel::default().show(&platform.context(),|ui|{
-                   debugger.ui(ui);
+                let frame = epi::Frame::new(epi::backend::FrameData {
+                    info: epi::IntegrationInfo {
+                        name: "egui_example",
+                        web_info: Some(WebInfo {
+                            web_location_hash: "".to_string(),
+                        }),
+                        cpu_usage: previous_frame_time,
+                        native_pixels_per_point: Some(window.scale_factor() as _),
+                        prefer_dark_mode: None,
+                    },
+                    output: app_output,
+                    repaint_signal: repaint_signal.clone(),
                 });
+                // Draw the demo application.
+                debugger.update(&egui_ctx, &frame);
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
                 let (output, paint_commands) = platform.end_frame(Some(&window));
                 let paint_jobs = platform.context().tessellate(paint_commands);
-                let mut tex_delta =platform.context().tex_manager().write().take_delta();
-                tex_delta.set.iter().for_each(|(k,v)|{
-                    painter.set_texture(&glow_ctx,*k,v)
-                });
-
+                let mut tex_delta = platform.context().tex_manager().write().take_delta();
+                tex_delta
+                    .set
+                    .iter()
+                    .for_each(|(k, v)| painter.set_texture(&glow_ctx, *k, v));
 
                 let egui::Output {
                     text_cursor_pos, ..
@@ -115,10 +127,12 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                         paint_jobs,
                     );
                 }
-                tex_delta.free.drain(..).for_each(|k|{
-                    painter.free_texture(&glow_ctx,k)
-                });
-
+                tex_delta
+                    .free
+                    .drain(..)
+                    .for_each(|k| painter.free_texture(&glow_ctx, k));
+                let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
+                previous_frame_time = Some(frame_time);
             }
             MainEventsCleared | UserEvent(_) => {
                 window.request_redraw();
