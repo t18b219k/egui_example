@@ -151,9 +151,14 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 winit::event::WindowEvent::Resized(x) => {
                     window.set_inner_size(x);
                 }
-                event => {
-                    demo_app.feed(&event);
-                }
+                event => match event {
+                    winit::event::WindowEvent::ReceivedCharacter(_)
+                    | winit::event::WindowEvent::KeyboardInput { .. }
+                    | winit::event::WindowEvent::IME(_) => {
+                        demo_app.feed(&event);
+                    }
+                    _ => (),
+                },
             },
             _ => (),
         }

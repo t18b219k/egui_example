@@ -24,7 +24,7 @@ impl epi::App for KeyboardDebugger {
     fn update(&mut self, ctx: &CtxRef, frame: &Frame) {
         egui::Window::new("Keyboard debugger").show(ctx, |ui| {
             let scroll = egui::containers::ScrollArea::both();
-            scroll.show(ui, |ui| {
+            scroll.stick_to_bottom().show(ui, |ui| {
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.label("please input here");
