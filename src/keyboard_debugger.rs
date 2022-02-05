@@ -23,21 +23,24 @@ impl KeyboardDebugger {
 impl epi::App for KeyboardDebugger {
     fn update(&mut self, ctx: &CtxRef, frame: &Frame) {
         egui::Window::new("Keyboard debugger").show(ctx, |ui| {
-            let scroll = egui::containers::ScrollArea::both();
-            scroll.stick_to_bottom().show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("please input here");
-                        ui.text_edit_singleline(&mut self.text_buffer);
-                        if ui.button("clear logs").clicked() {
-                            self.clear()
-                        }
-                    });
-                    self.event_buffer.iter().for_each(|log| {
-                        ui.label(log);
-                    });
-                })
+            ui.vertical(|ui|{
+                ui.horizontal(|ui| {
+                    ui.label("please input here");
+                    ui.text_edit_singleline(&mut self.text_buffer);
+                    if ui.button("clear logs").clicked() {
+                        self.clear()
+                    }
+                });
+                let scroll = egui::containers::ScrollArea::both();
+                scroll.stick_to_bottom().show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        self.event_buffer.iter().for_each(|log| {
+                            ui.label(log);
+                        });
+                    })
+                });
             });
+
         });
         frame.request_repaint()
     }
