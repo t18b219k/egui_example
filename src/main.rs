@@ -85,13 +85,12 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 egui::containers::CentralPanel::default().show(&platform.context(),|ui|{
                    debugger.ui(ui);
                 });
-                let tex_delta=platform.context().tex_manager().write().take_delta();
+                let paint_jobs = platform.context().tessellate(paint_commands);
+                let mut tex_delta =platform.context().tex_manager().write().take_delta();
                 tex_delta.set.iter().for_each(|(k,v)|{
                     painter.set_texture(&glow_ctx,*k,v)
                 });
-                tex_delta.free.iter().for_each(|k|{
-                    painter.free_texture(&glow_ctx,*k)
-                });
+
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
                 let (output, paint_commands) = platform.end_frame(Some(&window));
                 let egui::Output {
@@ -100,7 +99,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 if let Some(egui::Pos2 { x, y }) = text_cursor_pos {
                     window.set_ime_position(winit::dpi::LogicalPosition { x, y });
                 }
-                let paint_jobs = platform.context().tessellate(paint_commands);
+
                 {
                     unsafe {
                         use glow::HasContext as _;
@@ -115,6 +114,9 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                         paint_jobs,
                     );
                 }
+                tex_delta.free.drain(..).for_each(|k|{
+                    painter.free_texture(&glow_ctx,*k)
+                });
 
             }
             MainEventsCleared | UserEvent(_) => {
