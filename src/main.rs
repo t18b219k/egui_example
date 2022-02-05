@@ -1,3 +1,5 @@
+mod keyboard_debugger;
+
 use instant::Instant;
 
 use egui::{FontData, FontDefinitions};
@@ -12,18 +14,12 @@ use winit::event_loop::ControlFlow;
 const INITIAL_WIDTH: u32 = 1280;
 const INITIAL_HEIGHT: u32 = 720;
 
-struct RepaintSignalMock;
-
-impl epi::backend::RepaintSignal for RepaintSignalMock {
-    fn request_repaint(&self) {}
-}
 
 static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
-/// A simple egui + wgpu + winit based example.
+
 async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
     let size = window.inner_size();
 
-    let repaint_signal = std::sync::Arc::new(RepaintSignalMock);
 
     // We use the egui_winit_platform crate as the platform.
     let mut platform = Platform::new(PlatformDescriptor {
@@ -33,21 +29,20 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         font_definitions: FontDefinitions::default(),
         style: Default::default(),
     });
-    let mut egui_ctx = platform.context();
-    //to install japanese font start frame.
-    egui_ctx.begin_frame(egui::RawInput::default());
-    let mut fonts = egui_ctx.fonts().definitions().clone();
+    let  egui_ctx = platform.context();
+    //install japanese
+    let mut fonts = FontDefinitions::default();
+
     //install noto sans jp regular
     fonts.font_data.insert(
         "NotoSansCJK".to_string(),
         FontData::from_static(NOTO_SANS_JP_REGULAR),
     );
     fonts
-        .fonts_for_family
+        .families
         .values_mut()
         .for_each(|x| x.push("NotoSansCJK".to_string()));
     egui_ctx.set_fonts(fonts);
-    egui_ctx.end_frame();
     //
     use wasm_bindgen::JsCast;
     use winit::platform::web::WindowExtWebSys;
@@ -70,10 +65,11 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
     .unwrap();
 
     // Display the demo application that ships with egui.
-    let mut demo_app = egui_demo_lib::WrapApp::default();
+
+    let mut debugger = keyboard_debugger::KeyboardDebugger::new();
 
     let start_time = Instant::now();
-    let mut previous_frame_time = None;
+
     event_loop.run(move |event, _, control_flow| {
         // Pass the winit events to the platform integration.
         platform.handle_event(&event);
@@ -81,27 +77,14 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         match event {
             RedrawRequested(..) => {
                 platform.update_time(start_time.elapsed().as_secs_f64());
-                // Begin to draw the UI frame.
-                let egui_start = Instant::now();
-                platform.begin_frame();
-                let app_output = epi::backend::AppOutput::default();
 
-                let mut frame = epi::Frame::new(epi::backend::FrameData {
-                    info: epi::IntegrationInfo {
-                        name: "egui_example",
-                        web_info: Some(WebInfo {
-                            web_location_hash: "".to_string(),
-                        }),
-                        cpu_usage: previous_frame_time,
-                        native_pixels_per_point: Some(window.scale_factor() as _),
-                        prefer_dark_mode: None,
-                    },
-                    output: app_output,
-                    repaint_signal: repaint_signal.clone(),
-                });
+                platform.begin_frame();
+
 
                 // Draw the demo application.
-                demo_app.update(&platform.context(), &mut frame);
+                egui::containers::CentralPanel::default().show(&platform.context(),|ui|{
+                   debugger.ui(ui);
+                });
 
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
                 let (output, paint_commands) = platform.end_frame(Some(&window));
@@ -118,15 +101,6 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                         glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
                         glow_ctx.clear(glow::COLOR_BUFFER_BIT);
                     }
-                    frame.take_app_output().tex_allocation_data.creations.iter().for_each(
-                        |(k,v)|{
-                            painter.set_texture(&glow_ctx,*k,v);
-                        }
-                    );
-                    frame.take_app_output().tex_allocation_data.destructions.iter().for_each(|k|{
-                        painter.free_texture(*k);
-                    });
-                    painter.upload_egui_texture(&glow_ctx, &platform.context().font_image());
                     // draw things behind egui here
                     painter.paint_meshes(
                         &glow_ctx,
@@ -135,8 +109,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                         paint_jobs,
                     );
                 }
-                let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
-                previous_frame_time = Some(frame_time);
+
             }
             MainEventsCleared | UserEvent(_) => {
                 window.request_redraw();
@@ -148,7 +121,9 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 winit::event::WindowEvent::Resized(x) => {
                     window.set_inner_size(x);
                 }
-                _ => {}
+                event => {
+                    debugger.feed(&event);
+                }
             },
             _ => (),
         }
