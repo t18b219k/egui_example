@@ -11,21 +11,22 @@ use winit::dpi::LogicalSize;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
 
+const INITIAL_WIDTH: u32 = 1280;
+const INITIAL_HEIGHT: u32 = 720;
+
 struct RepaintSignalMock;
 
 impl epi::backend::RepaintSignal for RepaintSignalMock {
     fn request_repaint(&self) {}
 }
 
-const INITIAL_WIDTH: u32 = 1280;
-const INITIAL_HEIGHT: u32 = 720;
-
 static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
-
+/// A simple egui + wgpu + winit based example.
 async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
     let size = window.inner_size();
 
     let repaint_signal = std::sync::Arc::new(RepaintSignalMock);
+
     // We use the egui_winit_platform crate as the platform.
     let mut platform = Platform::new(PlatformDescriptor {
         physical_width: size.width as u32,
@@ -34,20 +35,21 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         font_definitions: FontDefinitions::default(),
         style: Default::default(),
     });
-    let egui_ctx = platform.context();
-    //install japanese
-    let mut fonts = FontDefinitions::default();
-
+    let mut egui_ctx = platform.context();
+    //to install japanese font start frame.
+    egui_ctx.begin_frame(egui::RawInput::default());
+    let mut fonts = egui_ctx.fonts().definitions().clone();
     //install noto sans jp regular
     fonts.font_data.insert(
         "NotoSansCJK".to_string(),
         FontData::from_static(NOTO_SANS_JP_REGULAR),
     );
     fonts
-        .families
+        .fonts_for_family
         .values_mut()
         .for_each(|x| x.push("NotoSansCJK".to_string()));
     egui_ctx.set_fonts(fonts);
+    egui_ctx.end_frame();
     //
     use wasm_bindgen::JsCast;
     use winit::platform::web::WindowExtWebSys;
@@ -63,8 +65,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
     let mut painter = egui_glow::Painter::new(&glow_ctx, None, "").unwrap();
 
     // Display the demo application that ships with egui.
-
-    let mut debugger = keyboard_debugger::KeyboardDebugger::new();
+    let mut demo_app = keyboard_debugger::KeyboardDebugger::new();
 
     let start_time = Instant::now();
     let mut previous_frame_time = None;
@@ -76,13 +77,11 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
             RedrawRequested(..) => {
                 platform.update_time(start_time.elapsed().as_secs_f64());
                 // Begin to draw the UI frame.
-
                 let egui_start = Instant::now();
-                platform.begin_frame();
                 platform.begin_frame();
                 let app_output = epi::backend::AppOutput::default();
 
-                let frame = epi::Frame::new(epi::backend::FrameData {
+                let mut frame = epi::Frame::new(epi::backend::FrameData {
                     info: epi::IntegrationInfo {
                         name: "egui_example",
                         web_info: Some(WebInfo {
@@ -95,30 +94,42 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                     output: app_output,
                     repaint_signal: repaint_signal.clone(),
                 });
+
                 // Draw the demo application.
-                debugger.update(&egui_ctx, &frame);
+                demo_app.update(&platform.context(), &mut frame);
+
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
                 let (output, paint_commands) = platform.end_frame(Some(&window));
-                let paint_jobs = platform.context().tessellate(paint_commands);
-                let mut tex_delta = platform.context().tex_manager().write().take_delta();
-                tex_delta
-                    .set
-                    .iter()
-                    .for_each(|(k, v)| painter.set_texture(&glow_ctx, *k, v));
-
                 let egui::Output {
                     text_cursor_pos, ..
                 } = output;
                 if let Some(egui::Pos2 { x, y }) = text_cursor_pos {
                     window.set_ime_position(winit::dpi::LogicalPosition { x, y });
                 }
-
+                let paint_jobs = platform.context().tessellate(paint_commands);
                 {
                     unsafe {
                         use glow::HasContext as _;
                         glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
                         glow_ctx.clear(glow::COLOR_BUFFER_BIT);
                     }
+                    frame
+                        .take_app_output()
+                        .tex_allocation_data
+                        .creations
+                        .iter()
+                        .for_each(|(k, v)| {
+                            painter.set_texture(&glow_ctx, *k, v);
+                        });
+                    frame
+                        .take_app_output()
+                        .tex_allocation_data
+                        .destructions
+                        .iter()
+                        .for_each(|k| {
+                            painter.free_texture(*k);
+                        });
+                    painter.upload_egui_texture(&glow_ctx, &platform.context().font_image());
                     // draw things behind egui here
                     painter.paint_meshes(
                         &glow_ctx,
@@ -127,10 +138,6 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                         paint_jobs,
                     );
                 }
-                tex_delta
-                    .free
-                    .drain(..)
-                    .for_each(|k| painter.free_texture(&glow_ctx, k));
                 let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
                 previous_frame_time = Some(frame_time);
             }
@@ -145,7 +152,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                     window.set_inner_size(x);
                 }
                 event => {
-                    debugger.feed(&event);
+                    demo_app.feed(&event);
                 }
             },
             _ => (),
