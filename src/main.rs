@@ -116,7 +116,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                     );
                 }
                 tex_delta.free.drain(..).for_each(|k|{
-                    painter.free_texture(&glow_ctx,*k)
+                    painter.free_texture(&glow_ctx,k)
                 });
 
             }
