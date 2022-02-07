@@ -21,7 +21,8 @@ impl epi::backend::RepaintSignal for RepaintSignalMock {
 }
 
 static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
-/// A simple egui + wgpu + winit based example.
+
+
 async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
     let size = window.inner_size();
 
@@ -64,7 +65,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
     // We use the egui_glow crate as the render backend.
     let mut painter = egui_glow::Painter::new(&glow_ctx, None, "").unwrap();
 
-    // Display the demo application that ships with egui.
+    // Display the demo application
     let mut demo_app = keyboard_debugger::KeyboardDebugger::new();
 
     let start_time = Instant::now();
