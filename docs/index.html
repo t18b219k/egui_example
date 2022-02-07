@@ -78,7 +78,7 @@
         console.log("loaded wasm, starting egui app…");
         wasm_bindgen.run();
         console.log("egui app started.");
-        document.getElementById("loading").remove();
+        document.getElementById("center_text").remove();
     }
     function on_wasm_error(error) {
         console.error("Failed to start egui: " + error);
