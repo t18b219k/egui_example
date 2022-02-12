@@ -7,6 +7,7 @@ use egui::{FontData, FontDefinitions};
 use egui_glow::glow;
 use egui_winit_platform::{Platform, PlatformDescriptor};
 use epi::*;
+use web_sys::HtmlCanvasElement;
 use winit::dpi::LogicalSize;
 use winit::event::Event::*;
 use winit::event_loop::ControlFlow;
@@ -21,7 +22,6 @@ impl epi::backend::RepaintSignal for RepaintSignalMock {
 }
 
 static NOTO_SANS_JP_REGULAR: &[u8] = include_bytes!("../NotoSansJP-Regular.otf");
-
 
 async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window::Window) {
     let size = window.inner_size();
@@ -169,26 +169,22 @@ fn main() {
     let event_loop = winit::event_loop::EventLoop::new();
     let wb = winit::window::WindowBuilder::new();
 
+    use wasm_bindgen::JsCast;
+    use winit::platform::web::WindowBuilderExtWebSys;
+    // On wasm, append the canvas to the document body
+    let canvas = web_sys::window()
+        .and_then(|win| win.document())
+        .and_then(|doc| doc.get_element_by_id("the_canvas_id"));
     let window = wb
         .with_inner_size(LogicalSize {
             width: INITIAL_WIDTH,
             height: INITIAL_HEIGHT,
         })
+        .with_canvas(canvas.and_then(|element| element.dyn_into::<HtmlCanvasElement>().ok()))
         .build(&event_loop)
         .unwrap();
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-
-        use winit::platform::web::WindowExtWebSys;
-        // On wasm, append the canvas to the document body
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| doc.body())
-            .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
-                    .ok()
-            })
-            .expect("couldn't append canvas to document body");
         wasm_bindgen_futures::spawn_local(run(event_loop, window));
     }
 }

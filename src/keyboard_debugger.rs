@@ -23,7 +23,7 @@ impl KeyboardDebugger {
 impl epi::App for KeyboardDebugger {
     fn update(&mut self, ctx: &CtxRef, frame: &Frame) {
         egui::Window::new("Keyboard debugger").show(ctx, |ui| {
-            ui.vertical(|ui|{
+            ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.label("please input here");
                     ui.text_edit_singleline(&mut self.text_buffer);
@@ -40,7 +40,6 @@ impl epi::App for KeyboardDebugger {
                     })
                 });
             });
-
         });
         frame.request_repaint()
     }
