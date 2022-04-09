@@ -1,4 +1,4 @@
-use egui::CtxRef;
+use egui::Context;
 use epi::Frame;
 
 pub struct KeyboardDebugger {
@@ -21,7 +21,7 @@ impl KeyboardDebugger {
     }
 }
 impl epi::App for KeyboardDebugger {
-    fn update(&mut self, ctx: &CtxRef, frame: &Frame) {
+    fn update(&mut self, ctx: &Context, frame: &Frame) {
         egui::Window::new("Keyboard debugger").show(ctx, |ui| {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {

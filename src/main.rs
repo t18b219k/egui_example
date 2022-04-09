@@ -2,7 +2,7 @@ mod keyboard_debugger;
 
 use instant::Instant;
 
-use egui::{FontData, FontDefinitions};
+use egui::{FontData, FontDefinitions, FontFamily};
 
 use egui_glow::glow;
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -36,21 +36,25 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         font_definitions: FontDefinitions::default(),
         style: Default::default(),
     });
-    let mut egui_ctx = platform.context();
+    let egui_ctx = platform.context();
     //to install japanese font start frame.
-    egui_ctx.begin_frame(egui::RawInput::default());
-    let mut fonts = egui_ctx.fonts().definitions().clone();
+    let mut fonts = egui::FontDefinitions::default();
     //install noto sans jp regular
     fonts.font_data.insert(
         "NotoSansCJK".to_string(),
         FontData::from_static(NOTO_SANS_JP_REGULAR),
     );
     fonts
-        .fonts_for_family
-        .values_mut()
-        .for_each(|x| x.push("NotoSansCJK".to_string()));
+        .families
+        .entry(FontFamily::Monospace)
+        .or_default()
+        .insert(0,"NotoSansCJK".to_owned());
+    fonts
+        .families
+        .entry(FontFamily::Proportional)
+        .or_default()
+        .insert(0,"NotoSansCJK".to_owned());
     egui_ctx.set_fonts(fonts);
-    egui_ctx.end_frame();
     //
     use wasm_bindgen::JsCast;
     use winit::platform::web::WindowExtWebSys;
@@ -85,9 +89,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 let mut frame = epi::Frame::new(epi::backend::FrameData {
                     info: epi::IntegrationInfo {
                         name: "egui_example",
-                        web_info: Some(WebInfo {
-                            web_location_hash: "".to_string(),
-                        }),
+                        web_info:None,
                         cpu_usage: previous_frame_time,
                         native_pixels_per_point: Some(window.scale_factor() as _),
                         prefer_dark_mode: None,
@@ -100,37 +102,30 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 demo_app.update(&platform.context(), &mut frame);
 
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
-                let (output, paint_commands) = platform.end_frame(Some(&window));
-                let egui::Output {
-                    text_cursor_pos, ..
-                } = output;
+                let egui::FullOutput{
+                    platform_output, needs_repaint:_, textures_delta, shapes
+                } = platform.end_frame(Some(&window));
+                let text_cursor_pos=platform_output.text_cursor_pos;
                 if let Some(egui::Pos2 { x, y }) = text_cursor_pos {
                     window.set_ime_position(winit::dpi::LogicalPosition { x, y });
                 }
-                let paint_jobs = platform.context().tessellate(paint_commands);
+                let paint_jobs = platform.context().tessellate(shapes);
                 {
                     unsafe {
                         use glow::HasContext as _;
                         glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
                         glow_ctx.clear(glow::COLOR_BUFFER_BIT);
                     }
-                    frame
-                        .take_app_output()
-                        .tex_allocation_data
-                        .creations
+                    textures_delta.set
                         .iter()
                         .for_each(|(k, v)| {
                             painter.set_texture(&glow_ctx, *k, v);
                         });
-                    frame
-                        .take_app_output()
-                        .tex_allocation_data
-                        .destructions
+                    textures_delta.free
                         .iter()
                         .for_each(|k| {
-                            painter.free_texture(*k);
+                            painter.free_texture(&glow_ctx,*k);
                         });
-                    painter.upload_egui_texture(&glow_ctx, &platform.context().font_image());
                     // draw things behind egui here
                     painter.paint_meshes(
                         &glow_ctx,
