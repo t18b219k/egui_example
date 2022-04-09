@@ -48,12 +48,12 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
         .families
         .entry(FontFamily::Monospace)
         .or_default()
-        .insert(0,"NotoSansCJK".to_owned());
+        .insert(0, "NotoSansCJK".to_owned());
     fonts
         .families
         .entry(FontFamily::Proportional)
         .or_default()
-        .insert(0,"NotoSansCJK".to_owned());
+        .insert(0, "NotoSansCJK".to_owned());
     egui_ctx.set_fonts(fonts);
     //
     use wasm_bindgen::JsCast;
@@ -89,7 +89,7 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 let mut frame = epi::Frame::new(epi::backend::FrameData {
                     info: epi::IntegrationInfo {
                         name: "egui_example",
-                        web_info:None,
+                        web_info: None,
                         cpu_usage: previous_frame_time,
                         native_pixels_per_point: Some(window.scale_factor() as _),
                         prefer_dark_mode: None,
@@ -102,10 +102,13 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                 demo_app.update(&platform.context(), &mut frame);
 
                 // End the UI frame. We could now handle the output and draw the UI with the backend.
-                let egui::FullOutput{
-                    platform_output, needs_repaint:_, textures_delta, shapes
+                let egui::FullOutput {
+                    platform_output,
+                    needs_repaint: _,
+                    textures_delta,
+                    shapes,
                 } = platform.end_frame(Some(&window));
-                let text_cursor_pos=platform_output.text_cursor_pos;
+                let text_cursor_pos = platform_output.text_cursor_pos;
                 if let Some(egui::Pos2 { x, y }) = text_cursor_pos {
                     window.set_ime_position(winit::dpi::LogicalPosition { x, y });
                 }
@@ -116,22 +119,13 @@ async fn run(event_loop: winit::event_loop::EventLoop<()>, window: winit::window
                         glow_ctx.clear_color(0.0, 0.0, 0.0, 1.0);
                         glow_ctx.clear(glow::COLOR_BUFFER_BIT);
                     }
-                    textures_delta.set
-                        .iter()
-                        .for_each(|(k, v)| {
-                            painter.set_texture(&glow_ctx, *k, v);
-                        });
-                    textures_delta.free
-                        .iter()
-                        .for_each(|k| {
-                            painter.free_texture(&glow_ctx,*k);
-                        });
-                    // draw things behind egui here
-                    painter.paint_meshes(
+
+                    painter.paint_and_update_textures(
                         &glow_ctx,
-                        [window.inner_size().width, window.inner_size().height],
+                        window.inner_size().into(),
                         window.scale_factor() as f32,
                         paint_jobs,
+                        &textures_delta,
                     );
                 }
                 let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
